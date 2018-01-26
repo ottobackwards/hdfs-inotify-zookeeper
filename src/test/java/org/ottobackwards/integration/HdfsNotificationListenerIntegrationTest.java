@@ -58,8 +58,10 @@ public class HdfsNotificationListenerIntegrationTest {
           // change the file
           Path file = new Path("/work/foo");
           if (fileSystem.exists(file)) {
+            // UNLINK
             fileSystem.delete(file, true);
           }
+          //CREATE
           OutputStream os = fileSystem.create(file);
           BufferedWriter br = new BufferedWriter(new OutputStreamWriter(os, "UTF-8"));
           br.write("Hello World");
