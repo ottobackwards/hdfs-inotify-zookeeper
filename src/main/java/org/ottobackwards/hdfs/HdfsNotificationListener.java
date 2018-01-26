@@ -18,7 +18,6 @@
 
 package org.ottobackwards.hdfs;
 
-import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.net.URI;
 import java.util.ArrayList;
@@ -33,7 +32,6 @@ import org.apache.hadoop.hdfs.inotify.Event.AppendEvent;
 import org.apache.hadoop.hdfs.inotify.Event.CreateEvent;
 import org.apache.hadoop.hdfs.inotify.Event.UnlinkEvent;
 import org.apache.hadoop.hdfs.inotify.EventBatch;
-import org.apache.hadoop.hdfs.inotify.MissingEventsException;
 import org.json.simple.JSONObject;
 import org.ottobackwards.zookeeper.ZookeeperNotificationTarget;
 import org.ottobackwards.zookeeper.ZookeeperNotifier;
@@ -99,27 +97,33 @@ public class HdfsNotificationListener {
     return lastTransactionId;
   }
 
-  public void start() throws IOException, MissingEventsException, InterruptedException {
-    HdfsAdmin admin = new HdfsAdmin(hdfsUri, new Configuration());
+  public void start() {
+    new Thread(() -> {
+      LOG.trace("HdfsNotificationListener started");
+      try {
+        HdfsAdmin admin = new HdfsAdmin(hdfsUri, new Configuration());
 
-    DFSInotifyEventInputStream eventStream = admin.getInotifyEventStream(lastTransactionId);
+        DFSInotifyEventInputStream eventStream = admin.getInotifyEventStream(lastTransactionId);
 
-    while (!stopFlag.get()) {
-      EventBatch batch = eventStream.take();
-      LOG.trace("TransactionId = " + batch.getTxid());
-      lastTransactionId = batch.getTxid();
-      for (Event event : batch.getEvents()) {
-        if (isEventSupported(event)) {
-          LOG.trace("Supported event type = " + event.getEventType());
-          String path = getPath(event);
-          LOG.trace("event path = " + path);
-          // evaluate if we want to evaluate this path
-          handleEvent(path, event);
-
+        while (!stopFlag.get()) {
+          EventBatch batch = eventStream.take();
+          LOG.trace("TransactionId = " + batch.getTxid());
+          lastTransactionId = batch.getTxid();
+          for (Event event : batch.getEvents()) {
+            if (isEventSupported(event)) {
+              LOG.trace("Supported event type = " + event.getEventType());
+              String path = getPath(event);
+              LOG.trace("event path = " + path);
+              // evaluate if we want to evaluate this path
+              handleEvent(path, event);
+            }
+          }
         }
+        LOG.trace("HdfsNotificationListener stopped");
+      } catch (Exception e) {
+        LOG.error("Error processing events", e);
       }
-    }
-    LOG.trace("HdfsNotificationListener stopped");
+    }).start();
   }
 
   public void stop() {
