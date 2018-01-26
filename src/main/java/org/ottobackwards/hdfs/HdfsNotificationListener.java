@@ -25,6 +25,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hdfs.DFSInotifyEventInputStream;
 import org.apache.hadoop.hdfs.client.HdfsAdmin;
 import org.apache.hadoop.hdfs.inotify.Event;
@@ -45,18 +46,13 @@ public class HdfsNotificationListener {
   public static class Builder {
 
     private long lastTransactionId = 0L;
-    private URI hdfsUri;
     private final List<ZookeeperNotificationTarget> targetsList = new ArrayList<>();
     private ZookeeperNotifier notifier;
-
-    public Builder(URI hdfsUri, ZookeeperNotifier notifier) {
-      if (hdfsUri == null) {
-        throw new IllegalArgumentException("hdfsUri cannot be null");
-      }
+    private Configuration configuration;
+    public Builder(ZookeeperNotifier notifier) {
       if (notifier == null) {
         throw new IllegalArgumentException("notifier cannot be null");
       }
-      this.hdfsUri = hdfsUri;
       this.notifier = notifier;
     }
 
@@ -70,29 +66,33 @@ public class HdfsNotificationListener {
       return this;
     }
 
+    public Builder withConfiguration(Configuration configuration) {
+      this.configuration = configuration;
+      return this;
+    }
+
     public HdfsNotificationListener build() {
-      if (hdfsUri == null) {
-        throw new IllegalArgumentException("hdfsUri cannot be null");
+      if (configuration == null) {
+        throw new IllegalArgumentException("hdfsUri and configuration cannot be null");
       }
-      return new HdfsNotificationListener(hdfsUri, notifier, lastTransactionId, targetsList);
+      return new HdfsNotificationListener(configuration, notifier, lastTransactionId, targetsList);
     }
   }
 
 
   private long lastTransactionId;
-  private URI hdfsUri;
   private ZookeeperNotifier notifier;
   private final List<ZookeeperNotificationTarget> targetsList = new ArrayList<>();
   private AtomicBoolean stopFlag = new AtomicBoolean(false);
+  private Configuration configuration;
 
-  private HdfsNotificationListener(URI hdfsUri, ZookeeperNotifier notifier, long lastTransactionId,
+  private HdfsNotificationListener(Configuration configuration,ZookeeperNotifier notifier, long lastTransactionId,
       List<ZookeeperNotificationTarget> targets) {
-    this.hdfsUri = hdfsUri;
+    this.configuration = configuration;
     this.notifier = notifier;
     this.lastTransactionId = lastTransactionId;
     this.targetsList.addAll(targets);
   }
-
   public long getLastTransactionId() {
     return lastTransactionId;
   }
@@ -100,8 +100,13 @@ public class HdfsNotificationListener {
   public void start() {
     new Thread(() -> {
       LOG.trace("HdfsNotificationListener started");
+      if (configuration == null) {
+        configuration = new Configuration();
+      }
+
       try {
-        HdfsAdmin admin = new HdfsAdmin(hdfsUri, new Configuration());
+        URI hdfsUri = FileSystem.newInstance(configuration).getUri();
+        HdfsAdmin admin = new HdfsAdmin(hdfsUri, configuration);
 
         DFSInotifyEventInputStream eventStream = admin.getInotifyEventStream(lastTransactionId);
 
@@ -189,6 +194,7 @@ public class HdfsNotificationListener {
   @SuppressWarnings("unchecked")
   private String createNotification(Event event) {
     JSONObject jsonObject = new JSONObject();
+    jsonObject.put("eventType", event.getEventType().toString());
     switch (event.getEventType()) {
       case CREATE:
         CreateEvent createEvent = (CreateEvent) event;
@@ -203,7 +209,7 @@ public class HdfsNotificationListener {
       case UNLINK:
         UnlinkEvent unlinkEvent = (UnlinkEvent) event;
         jsonObject.put("path", unlinkEvent.getPath());
-        jsonObject.put("overwrite", unlinkEvent.getTimestamp());
+        jsonObject.put("timestamp", unlinkEvent.getTimestamp());
         LOG.trace("  path = " + unlinkEvent.getPath());
         LOG.trace("  timestamp = " + unlinkEvent.getTimestamp());
         break;
