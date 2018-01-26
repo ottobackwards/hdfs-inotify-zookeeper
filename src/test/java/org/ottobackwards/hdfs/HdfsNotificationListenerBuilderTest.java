@@ -39,14 +39,14 @@ public class HdfsNotificationListenerBuilderTest {
   public void testNoUriThrowsException() {
     Builder builder = new Builder(null, new MockNotifier()).withLastTransactionId(0L)
         .withTargets(targets);
-    HdfsNotificationListener listener = builder.build();
+    builder.build();
   }
 
   @Test(expected = IllegalArgumentException.class)
   public void testNoNotifierThrowsException() {
     Builder builder = new Builder(URI.create("hdfs://foo:8020"), null).withLastTransactionId(0L)
         .withTargets(targets);
-    HdfsNotificationListener listener = builder.build();
+    builder.build();
   }
 
 }
