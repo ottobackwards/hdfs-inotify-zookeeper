@@ -18,6 +18,8 @@
 
 package org.ottobackwards.zookeeper;
 
-public class ZookeeperNotifier {
+public interface ZookeeperNotifier {
+
+  void notify(ZookeeperNotificationTarget target, String notification);
 
 }

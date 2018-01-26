@@ -16,9 +16,52 @@
  * limitations under the License.
  */
 
-
 package org.ottobackwards.zookeeper;
 
-public class ZookeeperNotificationTarget {
+import java.util.regex.Pattern;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.builder.EqualsBuilder;
+import org.apache.commons.lang3.builder.HashCodeBuilder;
 
+public class ZookeeperNotificationTarget {
+  private String path;
+  private Pattern pattern;
+
+  public ZookeeperNotificationTarget(String path) {
+    if (StringUtils.isEmpty(path)) {
+      throw new IllegalArgumentException("path cannot be null or empty");
+    }
+    this.path = path;
+  }
+
+  public String getPath() {
+    return path;
+  }
+
+  public boolean matches(String potentialMatch) {
+    if (pattern == null) {
+      pattern = Pattern.compile(path);
+    }
+    return pattern.matcher(potentialMatch).matches();
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+
+    ZookeeperNotificationTarget that = (ZookeeperNotificationTarget) o;
+
+    return new EqualsBuilder().append(getPath(), that.getPath()).isEquals();
+  }
+
+  @Override
+  public int hashCode() {
+    return new HashCodeBuilder(17, 37).append(getPath()).toHashCode();
+  }
 }

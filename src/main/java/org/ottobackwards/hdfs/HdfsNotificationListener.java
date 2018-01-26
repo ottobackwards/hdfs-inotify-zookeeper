@@ -24,9 +24,7 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.DFSInotifyEventInputStream;
 import org.apache.hadoop.hdfs.client.HdfsAdmin;
@@ -38,25 +36,33 @@ import org.apache.hadoop.hdfs.inotify.EventBatch;
 import org.apache.hadoop.hdfs.inotify.MissingEventsException;
 import org.json.simple.JSONObject;
 import org.ottobackwards.zookeeper.ZookeeperNotificationTarget;
+import org.ottobackwards.zookeeper.ZookeeperNotifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class HDFSNotificationListener {
+public class HdfsNotificationListener {
 
   private static Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
 
   public static class Builder {
+
     private long lastTransactionId = 0L;
     private URI hdfsUri;
-    private List<ZookeeperNotificationTarget> targetsList;
+    private final List<ZookeeperNotificationTarget> targetsList = new ArrayList<>();
+    private ZookeeperNotifier notifier;
 
-    public Builder(URI hdfsUri){
-      if(hdfsUri == null) {
+    public Builder(URI hdfsUri, ZookeeperNotifier notifier) {
+      if (hdfsUri == null) {
         throw new IllegalArgumentException("hdfsUri cannot be null");
       }
+      if (notifier == null) {
+        throw new IllegalArgumentException("notifier cannot be null");
+      }
+      this.hdfsUri = hdfsUri;
+      this.notifier = notifier;
     }
 
-    public Builder withLastTransactionId(long id){
+    public Builder withLastTransactionId(long id) {
       this.lastTransactionId = id;
       return this;
     }
@@ -66,24 +72,27 @@ public class HDFSNotificationListener {
       return this;
     }
 
-    public HDFSNotificationListener build() {
-      if(hdfsUri == null) {
+    public HdfsNotificationListener build() {
+      if (hdfsUri == null) {
         throw new IllegalArgumentException("hdfsUri cannot be null");
       }
-      return new HDFSNotificationListener(hdfsUri, lastTransactionId, targetsList);
+      return new HdfsNotificationListener(hdfsUri, notifier, lastTransactionId, targetsList);
     }
   }
 
 
   private long lastTransactionId;
   private URI hdfsUri;
-  private List<ZookeeperNotificationTarget> targetsList;
+  private ZookeeperNotifier notifier;
+  private final List<ZookeeperNotificationTarget> targetsList = new ArrayList<>();
   private AtomicBoolean stopFlag = new AtomicBoolean(false);
 
-  private HDFSNotificationListener(URI hdfsUri, long lastTransactionId, List<ZookeeperNotificationTarget> targets) {
+  private HdfsNotificationListener(URI hdfsUri, ZookeeperNotifier notifier, long lastTransactionId,
+      List<ZookeeperNotificationTarget> targets) {
     this.hdfsUri = hdfsUri;
+    this.notifier = notifier;
     this.lastTransactionId = lastTransactionId;
-    this.targetsList = targets;
+    this.targetsList.addAll(targets);
   }
 
   public long getLastTransactionId() {
@@ -105,21 +114,25 @@ public class HDFSNotificationListener {
           String path = getPath(event);
           LOG.trace("event path = " + path);
           // evaluate if we want to evaluate this path
-          Optional<ZookeeperNotificationTarget> notificationTarget = getTargetForPath(path);
-          LOG.trace("path " + path + " is tracked");
-          notificationTarget.ifPresent((target) -> {
-            String notification = createNotification(event);
-            sendNotification(notificationTarget.get(), notification);
-          });
+          handleEvent(path, event);
+
         }
       }
     }
-    LOG.trace("HDFSNotificationListener stopped");
+    LOG.trace("HdfsNotificationListener stopped");
   }
 
   public void stop() {
-    LOG.trace("Stop HDFSNotificationListener");
+    LOG.trace("Stop HdfsNotificationListener");
     stopFlag.set(true);
+  }
+
+  public void addZookeeperNotificationTarget(ZookeeperNotificationTarget target) {
+    synchronized (targetsList) {
+      if (!targetsList.contains(target)) {
+        targetsList.add(target);
+      }
+    }
   }
 
   private boolean isEventSupported(Event event) {
@@ -159,39 +172,40 @@ public class HDFSNotificationListener {
     }
   }
 
-  private Optional<ZookeeperNotificationTarget> getTargetForPath(String path) {
-    if (StringUtils.isEmpty(path)) {
-      throw new IllegalArgumentException("Path cannot be null");
+  private void handleEvent(String path, Event event) {
+    synchronized (targetsList) {
+      for (ZookeeperNotificationTarget target : targetsList) {
+        if (target.matches(path)) {
+          notifier.notify(target, createNotification(event));
+        }
+      }
     }
-
-    // validate against each target
-
-    return Optional.empty();
   }
 
+  @SuppressWarnings("unchecked")
   private String createNotification(Event event) {
-    JSONObject eventJSON = new JSONObject();
+    JSONObject jsonObject = new JSONObject();
     switch (event.getEventType()) {
       case CREATE:
         CreateEvent createEvent = (CreateEvent) event;
-        eventJSON.put("path", createEvent.getPath());
-        eventJSON.put("owner", createEvent.getOwnerName());
-        eventJSON.put("overwrite", createEvent.getOverwrite());
-        eventJSON.put("ctime", createEvent.getCtime());
+        jsonObject.put("path", createEvent.getPath());
+        jsonObject.put("owner", createEvent.getOwnerName());
+        jsonObject.put("overwrite", createEvent.getOverwrite());
+        jsonObject.put("ctime", createEvent.getCtime());
         LOG.trace("  path = " + createEvent.getPath());
         LOG.trace("  owner = " + createEvent.getOwnerName());
         LOG.trace("  ctime = " + createEvent.getCtime());
         break;
       case UNLINK:
         UnlinkEvent unlinkEvent = (UnlinkEvent) event;
-        eventJSON.put("path", unlinkEvent.getPath());
-        eventJSON.put("overwrite", unlinkEvent.getTimestamp());
+        jsonObject.put("path", unlinkEvent.getPath());
+        jsonObject.put("overwrite", unlinkEvent.getTimestamp());
         LOG.trace("  path = " + unlinkEvent.getPath());
         LOG.trace("  timestamp = " + unlinkEvent.getTimestamp());
         break;
       case APPEND:
         AppendEvent appendEvent = (AppendEvent) event;
-        eventJSON.put("path", appendEvent.getPath());
+        jsonObject.put("path", appendEvent.getPath());
         LOG.trace("  path = " + appendEvent.getPath());
         break;
       case CLOSE:
@@ -200,10 +214,6 @@ public class HDFSNotificationListener {
       default:
         break;
     }
-    return eventJSON.toJSONString();
-  }
-
-  private void sendNotification(ZookeeperNotificationTarget target, String notification) {
-
+    return jsonObject.toJSONString();
   }
 }
