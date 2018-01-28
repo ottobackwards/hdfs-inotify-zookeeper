@@ -18,30 +18,60 @@
 
 package org.ottobackwards.zookeeper;
 
-import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 
-public class ZookeeperNotificationTarget {
-  private String path;
-  private Pattern pattern;
+import java.util.regex.Pattern;
 
-  public ZookeeperNotificationTarget(String path) {
-    if (StringUtils.isEmpty(path)) {
-      throw new IllegalArgumentException("path cannot be null or empty");
+public class ZookeeperNotificationTarget {
+
+  public static class Builder {
+    private String zkPath;
+    private String watchPath;
+
+    public Builder withZkPath(String zkPath) {
+      this.zkPath = zkPath;
+      return this;
     }
-    this.path = path;
+
+    public Builder withWatchPath(String watchPath) {
+      this.watchPath = watchPath;
+      return this;
+    }
+
+    public ZookeeperNotificationTarget build() {
+      if (StringUtils.isEmpty(zkPath)) {
+        throw new IllegalArgumentException("zkPath cannot be empty");
+      }
+
+      if (StringUtils.isEmpty(watchPath)) {
+        throw new IllegalArgumentException("watchPath cannot be empty");
+      }
+      return new ZookeeperNotificationTarget(watchPath, zkPath);
+    }
   }
 
+  private String zkPath;
+  private Pattern pattern;
+  private String watchPath;
 
-  public String getPath() {
-    return path;
+  private ZookeeperNotificationTarget(String watchPath, String zkPath) {
+    this.zkPath = zkPath;
+    this.watchPath = watchPath;
+  }
+
+  public String getWatchPath() {
+    return watchPath;
+  }
+
+  public String getZkPath() {
+    return zkPath;
   }
 
   public boolean matches(String potentialMatch) {
     if (pattern == null) {
-      pattern = Pattern.compile(path);
+      pattern = Pattern.compile(watchPath);
     }
     return pattern.matcher(potentialMatch).matches();
   }
@@ -58,11 +88,12 @@ public class ZookeeperNotificationTarget {
 
     ZookeeperNotificationTarget that = (ZookeeperNotificationTarget) o;
 
-    return new EqualsBuilder().append(getPath(), that.getPath()).isEquals();
+    return new EqualsBuilder().append(getZkPath(), that.getZkPath())
+            .append(getWatchPath(), that.getWatchPath()).isEquals();
   }
 
   @Override
   public int hashCode() {
-    return new HashCodeBuilder(17, 37).append(getPath()).toHashCode();
+    return new HashCodeBuilder(17, 37).append(getZkPath()).append(getWatchPath()).toHashCode();
   }
 }

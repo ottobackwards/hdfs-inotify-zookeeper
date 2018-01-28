@@ -181,7 +181,7 @@ public class HdfsNotificationListener {
     }
   }
 
-  private void handleEvent(String path, Event event) {
+  private void handleEvent(String path, Event event) throws Exception {
     synchronized (targetsList) {
       for (ZookeeperNotificationTarget target : targetsList) {
         if (target.matches(path)) {

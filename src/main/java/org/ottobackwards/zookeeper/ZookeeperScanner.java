@@ -88,14 +88,16 @@ public class ZookeeperScanner {
       return Optional.empty();
     }
 
-    ZookeeperNotificationTarget target = null;
-
+    ZookeeperNotificationTarget.Builder builder = new ZookeeperNotificationTarget.Builder();
     for (String node : entryNodes) {
       if (node.equals("hdfsWatchPath")) {
         byte[] data = client.getData().forPath(String.format("%s/%s/%s",parentPath,entryNodePath,node));
-        target = new ZookeeperNotificationTarget(new String(data));
+        builder = builder.withWatchPath(new String(data));
+      } else if (node.equals("notifyNode")) {
+       builder = builder.withZkPath(String.format("%s/%s/%s",parentPath, entryNodePath,node));
       }
     }
-    return Optional.ofNullable(target);
+
+    return Optional.of(builder.build());
   }
 }

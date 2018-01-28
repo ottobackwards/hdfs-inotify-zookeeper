@@ -17,7 +17,7 @@ public class HdfsNotificationListenerBuilderTest {
   @Before
   public void before() {
     targets = new ArrayList<>();
-    targets.add(new ZookeeperNotificationTarget("foo/bar"));
+    targets.add(new ZookeeperNotificationTarget.Builder().withWatchPath("foo/bar").withZkPath("/reg/bar").build());
   }
 
   @Test

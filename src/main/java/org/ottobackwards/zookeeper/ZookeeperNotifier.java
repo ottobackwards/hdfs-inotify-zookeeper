@@ -20,6 +20,6 @@ package org.ottobackwards.zookeeper;
 
 public interface ZookeeperNotifier {
 
-  void notify(ZookeeperNotificationTarget target, String notification);
+  void notify(ZookeeperNotificationTarget target, String notification) throws Exception;
 
 }
