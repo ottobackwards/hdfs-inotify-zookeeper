@@ -1,11 +1,5 @@
 package org.ottobackwards.integration;
 
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.net.URI;
-import java.util.List;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.cache.TreeCache;
 import org.apache.curator.framework.recipes.cache.TreeCacheEvent;
@@ -19,13 +13,17 @@ import org.apache.hadoop.fs.permission.FsPermission;
 import org.junit.Assert;
 import org.junit.Test;
 import org.ottobackwards.MockConnectedNotifier;
-import org.ottobackwards.MockNotifier;
 import org.ottobackwards.hdfs.HdfsNotificationListener;
 import org.ottobackwards.hdfs.HdfsNotificationListener.Builder;
-import org.ottobackwards.zookeeper.DefaultZookeeperNotifier;
 import org.ottobackwards.zookeeper.ZookeeperNotificationTarget;
-import org.ottobackwards.zookeeper.ZookeeperNotifier;
 import org.ottobackwards.zookeeper.ZookeeperScanner;
+
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.net.URI;
+import java.util.List;
 
 public class HdfsNotificationListenerIntegrationTest {
 
@@ -38,7 +36,7 @@ public class HdfsNotificationListenerIntegrationTest {
       // setup the file
       URI uri = fileSystem.getUri();
       fileSystem.mkdirs(new Path("/work/"),
-          new FsPermission(FsAction.READ_WRITE, FsAction.READ_WRITE, FsAction.READ_WRITE));
+              new FsPermission(FsAction.READ_WRITE, FsAction.READ_WRITE, FsAction.READ_WRITE));
       fileSystem.copyFromLocalFile(new Path("./src/test/resources/foo"), new Path("/work/"));
 
       // setup zookeeper
@@ -54,7 +52,7 @@ public class HdfsNotificationListenerIntegrationTest {
             cache.getListenable().addListener(new TreeCacheListener() {
               @Override
               public void childEvent(CuratorFramework curatorFramework, TreeCacheEvent treeCacheEvent)
-                  throws Exception {
+                      throws Exception {
                 System.out.println("TREECACHE: " + treeCacheEvent.getType());
               }
             });
@@ -62,13 +60,15 @@ public class HdfsNotificationListenerIntegrationTest {
             cache.start();
 
             List<ZookeeperNotificationTarget> targets = ZookeeperScanner
-                .scan(client, "/test/registration");
+                    .scan(client, "/test/registration");
             Assert.assertNotNull(targets);
             Assert.assertEquals(1, targets.size());
             Assert.assertTrue(targets.get(0).matches("/work/foo"));
 
-            HdfsNotificationListener listener = new Builder(notifier).withConfiguration(configuration).withLastTransactionId(3L).withTargets(targets)
-                .build();
+            HdfsNotificationListener listener = new Builder(notifier).withConfiguration(configuration)
+                    .withLastTransactionId(3L)
+                    .withTargets(targets)
+                    .build();
             listener.start();
             // change the file
             Path file = new Path("/work/foo");
@@ -98,8 +98,8 @@ public class HdfsNotificationListenerIntegrationTest {
 
   private static void publishTestNodes(CuratorFramework client) throws Exception {
     client.create().creatingParentsIfNeeded()
-        .forPath("/test/registration/foo/hdfsWatchPath", "/work/foo".getBytes());
+            .forPath("/test/registration/foo/hdfsWatchPath", "/work/foo".getBytes());
     client.create().creatingParentsIfNeeded()
-        .forPath("/test/registration/foo/notifyNode", "{}".getBytes());
+            .forPath("/test/registration/foo/notifyNode", "{}".getBytes());
   }
 }
